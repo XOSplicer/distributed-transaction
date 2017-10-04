@@ -1,0 +1,9 @@
+[package]
+name = "transaction"
+version = "0.1.0"
+authors = ["Felix Stegmaier <stegmaier.felix@gmail.com>"]
+
+[dependencies]
+chrono = "0.4.0"
+sha2 = "0.6.0"
+itertools = "0.6.5"
