@@ -7,9 +7,9 @@ use chrono::prelude::*;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Transaction<Tz: TimeZone> {
+struct Transaction {
     id: u32,
-    timestamp: DateTime<Tz>,
+    timestamp: DateTime<chrono::FixedOffset>,
     group_id: u8,
     process_id: u8,
     text: String,
@@ -17,15 +17,15 @@ struct Transaction<Tz: TimeZone> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TransactionBuilder<Tz: TimeZone> {
+struct TransactionBuilder {
     id: Option<u32>,
-    timestamp: Option<DateTime<Tz>>,
+    timestamp: Option<DateTime<chrono::FixedOffset>>,
     group_id: Option<u8>,
     process_id: Option<u8>,
     text: Option<String>,
 }
 
-impl Transaction<chrono::FixedOffset> {
+impl Transaction {
     const MIN_ID: u32 = 1;
     const MAX_ID: u32 = 99_999_999;
     const MIN_GID: u8 = 0;
@@ -34,18 +34,18 @@ impl Transaction<chrono::FixedOffset> {
     const MAX_PID: u8 = 99;
     const INVALID_CHAR: &'static [&'static str] = &["\n", "\r", "\t", ";", "\0"];
 
-    pub fn build() -> TransactionBuilder<chrono::FixedOffset> {
+    pub fn build() -> TransactionBuilder {
         TransactionBuilder::new()
     }
 
     fn with_prev(
-        prev: &Vec<Transaction<chrono::FixedOffset>>,
+        prev: &Vec<Transaction>,
         id: u32,
         time: DateTime<chrono::FixedOffset>,
         gid: u8,
         pid: u8,
         text: String,
-    ) -> Result<Transaction<chrono::FixedOffset>, String> {
+    ) -> Result<Transaction, String> {
 
         // Check input parameters
         if id < Transaction::MIN_ID || id > Transaction::MAX_ID {
@@ -201,7 +201,7 @@ impl Transaction<chrono::FixedOffset> {
     }
 }
 
-impl TransactionBuilder<chrono::FixedOffset> {
+impl TransactionBuilder {
     pub fn new() -> Self {
         TransactionBuilder {
             id: None,
@@ -239,8 +239,8 @@ impl TransactionBuilder<chrono::FixedOffset> {
 
     pub fn try_finish_with_prev(
         self,
-        prev: &Vec<Transaction<chrono::FixedOffset>>,
-    ) -> Result<Transaction<chrono::FixedOffset>, String> {
+        prev: &Vec<Transaction>,
+    ) -> Result<Transaction, String> {
         Transaction::with_prev(
             prev,
             self.id.ok_or("No id given".to_string())?,
@@ -254,7 +254,7 @@ impl TransactionBuilder<chrono::FixedOffset> {
     pub fn try_finish_with_hash(
         self,
         hash: Vec<u8>,
-    ) -> Result<Transaction<chrono::FixedOffset>, String> {
+    ) -> Result<Transaction, String> {
         Transaction::with_hash(
             hash,
             self.id.ok_or("No id given".to_string())?,
