@@ -5,6 +5,8 @@ extern crate sha2;
 use itertools::Itertools;
 use chrono::prelude::*;
 use sha2::{Digest, Sha256};
+use std::io::BufRead;
+use std::io;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Transaction {
@@ -34,19 +36,13 @@ impl Transaction {
     const MAX_PID: u8 = 99;
     const INVALID_CHAR: &'static [&'static str] = &["\n", "\r", "\t", ";", "\0"];
 
+    const TZ_OFFSET: i32 = 1 * 3600;
+
     pub fn build() -> TransactionBuilder {
         TransactionBuilder::new()
     }
 
-    fn with_prev(
-        prev: &Vec<Transaction>,
-        id: u32,
-        time: DateTime<chrono::FixedOffset>,
-        gid: u8,
-        pid: u8,
-        text: String,
-    ) -> Result<Transaction, String> {
-
+    fn check_input(id: u32, gid: u8, pid: u8, text: &str) -> Result<(), String> {
         // Check input parameters
         if id < Transaction::MIN_ID || id > Transaction::MAX_ID {
             return Err(format!("Invalid id {}", id));
@@ -60,11 +56,24 @@ impl Transaction {
         if Transaction::INVALID_CHAR.iter().any(|c| text.contains(c)) {
             return Err(format!("Invalid text message `{}`", text));
         }
+        Ok(())
+    }
+
+    fn with_prev<'a, P: Iterator<Item = &'a Transaction>>(
+        prev: P,
+        id: u32,
+        time: DateTime<chrono::FixedOffset>,
+        gid: u8,
+        pid: u8,
+        text: String,
+    ) -> Result<Transaction, String> {
+
+        Transaction::check_input(id, gid, pid, &text)?;
 
         // Hash all previous transaction strings
         // and the partial new transaction
         let mut hasher = Sha256::default();
-        for t in prev.iter() {
+        for t in prev.fuse() {
             hasher.input(t.to_string().into_bytes().as_ref());
         }
         hasher.input(
@@ -92,10 +101,17 @@ impl Transaction {
         pid: u8,
         text: String,
     ) -> Result<Self, String> {
-        //FIXME: Calculating the hash in with_prev from is unnecessary
-        let mut t = Self::with_prev(&vec![], id, time, gid, pid, text)?;
-        t.checksum = hash;
-        Ok(t)
+
+        Transaction::check_input(id, gid, pid, &text)?;
+
+        Ok(Transaction {
+            id: id,
+            timestamp: time,
+            group_id: gid,
+            process_id: pid,
+            text: text,
+            checksum: hash,
+        })
     }
 
     // generate the unfinished string representation for a transaction
@@ -144,7 +160,7 @@ impl Transaction {
 
         builder = builder.with_timestamp(
             //timezone
-            chrono::FixedOffset::east(1 * 3600)
+            chrono::FixedOffset::east(Transaction::TZ_OFFSET)
                 .datetime_from_str(
                     parts.next().ok_or("Incomplete source, no id".to_owned())?,
                     "%d%m%y-%H:%M:%S",
@@ -199,6 +215,38 @@ impl Transaction {
             None => Ok(t),
         }
     }
+
+    pub fn id(&self) -> u32 {
+        self.id
+    }
+
+    pub fn ts<'a>(&'a self) -> &'a DateTime<chrono::FixedOffset> {
+        &self.timestamp
+    }
+
+    pub fn gid(&self) -> u8 {
+        self.group_id
+    }
+
+    pub fn pid(&self) -> u8 {
+        self.process_id
+    }
+
+    pub fn text<'a>(&'a self) -> &'a str {
+        self.text.as_str()
+    }
+
+    pub fn hash<'a>(&'a self) -> &'a [u8] {
+        self.checksum.as_slice()
+    }
+
+    pub fn next_id(&self) -> u32 {
+        if self.id >= Transaction::MAX_ID {
+            Transaction::MIN_ID
+        } else {
+            self.id + 1
+        }
+    }
 }
 
 impl TransactionBuilder {
@@ -237,12 +285,9 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn try_finish_with_prev(
-        self,
-        prev: &Vec<Transaction>,
-    ) -> Result<Transaction, String> {
+    pub fn try_finish_with_prev(self, prev: &Vec<Transaction>) -> Result<Transaction, String> {
         Transaction::with_prev(
-            prev,
+            prev.iter(),
             self.id.ok_or("No id given".to_string())?,
             self.timestamp.ok_or("No timestamp given".to_string())?,
             self.group_id.ok_or("No group id given".to_string())?,
@@ -251,10 +296,7 @@ impl TransactionBuilder {
         )
     }
 
-    pub fn try_finish_with_hash(
-        self,
-        hash: Vec<u8>,
-    ) -> Result<Transaction, String> {
+    pub fn try_finish_with_hash(self, hash: Vec<u8>) -> Result<Transaction, String> {
         Transaction::with_hash(
             hash,
             self.id.ok_or("No id given".to_string())?,
@@ -268,33 +310,31 @@ impl TransactionBuilder {
 
 
 fn main() {
-    let mut transactions = Vec::new();
-
-    let t3 = Transaction::build()
-        .with_id(1)
-        .with_timestamp(
-            DateTime::parse_from_rfc3339("2017-10-04T10:00:00+01:00").unwrap(),
-        )
-        .with_group_id(0)
-        .with_process_id(1)
-        .with_text("Testü".to_owned())
-        .try_finish_with_prev(&transactions)
-        .unwrap();
-    println!("{:#?}", t3.to_string());
-    transactions.push(t3);
-
-    let t4 = Transaction::build()
-        .with_id(2)
-        .with_timestamp(
-            DateTime::parse_from_rfc3339("2017-10-04T10:01:00+01:00").unwrap(),
-        )
-        .with_group_id(0)
-        .with_process_id(1)
-        .with_text("Test2".to_owned())
-        .try_finish_with_prev(&transactions)
-        .unwrap();
-    println!("{:#?}", t4.to_string());
-    transactions.push(t4);
+    let mut tx_log = Vec::new();
+    let stdin = io::stdin();
+    let mut lines = stdin.lock().lines();
+    println!("GID to use: ");
+    let gid: u8 = lines.next().unwrap().unwrap().trim().parse().unwrap();
+    println!("PID to use: ");
+    let pid: u8 = lines.next().unwrap().unwrap().trim().parse().unwrap();
+    let mut next_id = Transaction::MIN_ID;
+    loop {
+        println!("Message: ");
+        let msg = lines.next().unwrap().unwrap().to_owned();
+        let tx = Transaction::build()
+            .with_id(next_id)
+            .with_timestamp(Local::now().with_timezone(
+                &FixedOffset::east(Transaction::TZ_OFFSET),
+            ))
+            .with_group_id(gid)
+            .with_process_id(pid)
+            .with_text(msg)
+            .try_finish_with_prev(&tx_log)
+            .unwrap();
+        next_id = tx.next_id();
+        print!("====> {}", tx.to_string());
+        tx_log.push(tx);
+    }
 
 }
 
