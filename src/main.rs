@@ -188,7 +188,7 @@ impl Transaction {
                 .to_owned(),
         );
 
-        let mut hash = Vec::new();
+        let mut hash = Vec::with_capacity(32);
         let mut hash_str = parts
             .next()
             .ok_or("Incomplete source, no hash".to_owned())?
@@ -345,7 +345,7 @@ fn main() {
     }
     */
 
-    let n = 1_000_000;
+    let n = 100_000;
     //let mut tx_log = Vec::with_capacity(n);
     let gid = 0;
     let pid = 1;
