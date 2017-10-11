@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use transaction_log::TransactionLog;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Transaction {
     id: u32,
     timestamp: DateTime<chrono::FixedOffset>,

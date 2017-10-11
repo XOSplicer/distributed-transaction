@@ -5,15 +5,13 @@ extern crate sha2;
 mod transaction;
 mod transaction_log;
 
-//use std::io::BufRead;
-//use std::io;
-
 use transaction::Transaction;
 use transaction_log::*;
 
 fn main() {
-    let n = 1_000_000;
-    let mut tx_log = FullTransactionLog::with_capactity(n);
+    let n = 100_000;
+    //let mut tx_log = FullTransactionLog::with_capactity(n);
+    let mut tx_log = DirectFileLog::new("/tmp/tx_log_tmp").unwrap();
     let gid = 0;
     let pid = 1;
     for _ in 0..n {

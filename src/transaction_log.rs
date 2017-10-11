@@ -1,4 +1,7 @@
-use std::iter::IntoIterator;
+use std::fs::{File, OpenOptions};
+use std::path::Path;
+use std::io;
+use std::io::prelude::*;
 
 use transaction::Transaction;
 
@@ -14,6 +17,7 @@ pub trait TransactionLog {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SingleTransactionLog {
     last: Option<Transaction>,
 }
@@ -37,6 +41,7 @@ impl TransactionLog for SingleTransactionLog {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FullTransactionLog {
     log: Vec<Transaction>,
 }
@@ -61,5 +66,38 @@ impl TransactionLog for FullTransactionLog {
     fn append(&mut self, tx: Transaction) -> Result<(), Self::AppendError> {
         self.log.push(tx);
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DirectFileLog {
+    file: File,
+    last: Option<Transaction>,
+}
+
+impl DirectFileLog {
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        Ok(DirectFileLog {
+            file: OpenOptions::new()
+                .write(true)
+                .append(true)
+                .create(true)
+                .open(path)?,
+            last: None
+        })
+    }
+}
+
+impl TransactionLog for DirectFileLog {
+    type AppendError = io::Error;
+
+    fn last<'a>(&'a self) -> Option<&'a Transaction> {
+        self.last.as_ref()
+    }
+
+    fn append(&mut self, tx: Transaction) -> Result<(), Self::AppendError> {
+        self.last = Some(tx);
+        let string = self.last().unwrap().to_string();
+        self.file.write_all(string.as_bytes())
     }
 }
