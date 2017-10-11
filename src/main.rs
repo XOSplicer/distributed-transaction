@@ -59,8 +59,8 @@ impl Transaction {
         Ok(())
     }
 
-    fn with_prev<'a, P: Iterator<Item = &'a Transaction>>(
-        prev: P,
+    fn with_prev(
+        prev: Option<&Transaction>,
         id: u32,
         time: DateTime<chrono::FixedOffset>,
         gid: u8,
@@ -73,14 +73,15 @@ impl Transaction {
         // Hash all previous transaction strings
         // and the partial new transaction
         let mut hasher = Sha256::default();
-        for t in prev.fuse() {
-            hasher.input(t.to_string().into_bytes().as_ref());
-        }
         hasher.input(
             Self::partial_string(id, &time, gid, pid, &text)
                 .into_bytes()
                 .as_ref(),
         );
+        if prev.is_some() {
+            hasher.input(prev.unwrap().hash());
+        }
+
         let checksum = Vec::from(hasher.result().as_slice());
 
         Ok(Transaction {
@@ -236,12 +237,11 @@ impl Transaction {
     pub fn text<'a>(&'a self) -> &'a str {
         self.text.as_str()
     }
+    */
 
     pub fn hash<'a>(&'a self) -> &'a [u8] {
         self.checksum.as_slice()
     }
-
-    */
 
     pub fn next_id(&self) -> u32 {
         if self.id >= Transaction::MAX_ID {
@@ -288,9 +288,9 @@ impl TransactionBuilder {
         self
     }
 
-    pub fn try_finish_with_prev(self, prev: &Vec<Transaction>) -> Result<Transaction, String> {
+    pub fn try_finish_with_prev(self, prev: Option<&Transaction>) -> Result<Transaction, String> {
         Transaction::with_prev(
-            prev.iter(),
+            prev,
             self.id.ok_or("No id given".to_string())?,
             self.timestamp.ok_or("No timestamp given".to_string())?,
             self.group_id.ok_or("No group id given".to_string())?,
@@ -345,11 +345,12 @@ fn main() {
     }
     */
 
-    let n = 1000;
-    let mut tx_log = Vec::with_capacity(n);
+    let n = 1_000_000;
+    //let mut tx_log = Vec::with_capacity(n);
     let gid = 0;
     let pid = 1;
     let mut next_id = Transaction::MIN_ID;
+    let mut last = None;
     for i in 1..n {
         let tx = Transaction::build()
             .with_id(next_id)
@@ -359,11 +360,12 @@ fn main() {
             .with_group_id(gid)
             .with_process_id(pid)
             .with_text("".to_owned())
-            .try_finish_with_prev(&tx_log)
+            .try_finish_with_prev(last.as_ref())
             .unwrap();
-        tx_log.push(tx);
+        next_id = tx.next_id();
+        last = Some(tx);
     }
-    println!("{}", tx_log.pop().unwrap().to_string());
+    println!("{}", last.unwrap().to_string());
 }
 
 mod test {
