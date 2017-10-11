@@ -313,7 +313,7 @@ impl TransactionBuilder {
 
 
 fn main() {
-
+    /*
     println!("current time: \n{:?}\n{:?}\n{:?}\n{:?}", Utc::now(), Local::now(), Local::now().with_timezone(
                 &FixedOffset::east(Transaction::TZ_OFFSET)), Utc::now().with_timezone(
                 &FixedOffset::east(Transaction::TZ_OFFSET)));
@@ -343,7 +343,27 @@ fn main() {
         print!("====> {}", tx.to_string());
         tx_log.push(tx);
     }
+    */
 
+    let n = 1000;
+    let mut tx_log = Vec::with_capacity(n);
+    let gid = 0;
+    let pid = 1;
+    let mut next_id = Transaction::MIN_ID;
+    for i in 1..n {
+        let tx = Transaction::build()
+            .with_id(next_id)
+            .with_timestamp(Utc::now().with_timezone(
+                &FixedOffset::east(Transaction::TZ_OFFSET),
+            ))
+            .with_group_id(gid)
+            .with_process_id(pid)
+            .with_text("".to_owned())
+            .try_finish_with_prev(&tx_log)
+            .unwrap();
+        tx_log.push(tx);
+    }
+    println!("{}", tx_log.pop().unwrap().to_string());
 }
 
 mod test {
