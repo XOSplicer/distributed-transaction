@@ -36,7 +36,7 @@ impl Transaction {
     const MAX_PID: u8 = 99;
     const INVALID_CHAR: &'static [&'static str] = &["\n", "\r", "\t", ";", "\0"];
 
-    const TZ_OFFSET: i32 = 1 * 3600;
+    const TZ_OFFSET: i32 = 2 * 3600;
 
     pub fn build() -> TransactionBuilder {
         TransactionBuilder::new()
@@ -216,6 +216,7 @@ impl Transaction {
         }
     }
 
+    /*
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -239,6 +240,8 @@ impl Transaction {
     pub fn hash<'a>(&'a self) -> &'a [u8] {
         self.checksum.as_slice()
     }
+
+    */
 
     pub fn next_id(&self) -> u32 {
         if self.id >= Transaction::MAX_ID {
@@ -310,6 +313,11 @@ impl TransactionBuilder {
 
 
 fn main() {
+
+    println!("current time: \n{:?}\n{:?}\n{:?}\n{:?}", Utc::now(), Local::now(), Local::now().with_timezone(
+                &FixedOffset::east(Transaction::TZ_OFFSET)), Utc::now().with_timezone(
+                &FixedOffset::east(Transaction::TZ_OFFSET)));
+
     let mut tx_log = Vec::new();
     let stdin = io::stdin();
     let mut lines = stdin.lock().lines();
@@ -323,7 +331,7 @@ fn main() {
         let msg = lines.next().unwrap().unwrap().to_owned();
         let tx = Transaction::build()
             .with_id(next_id)
-            .with_timestamp(Local::now().with_timezone(
+            .with_timestamp(Utc::now().with_timezone(
                 &FixedOffset::east(Transaction::TZ_OFFSET),
             ))
             .with_group_id(gid)
@@ -391,7 +399,7 @@ mod test {
         let t = Transaction::build()
             .with_id(42)
             .with_timestamp(
-                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00").unwrap(),
+                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00").unwrap().with_timezone(&FixedOffset::east(Transaction::TZ_OFFSET)),
             )
             .with_group_id(43)
             .with_process_id(44)
