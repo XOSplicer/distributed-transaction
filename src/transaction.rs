@@ -13,6 +13,7 @@ pub struct Transaction {
     process_id: u8,
     text: String,
     hash: Vec<u8>,
+    hash_str: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,10 +77,11 @@ impl Transaction {
         );
         let prev = log.last();
         if prev.is_some() {
-            hasher.input(prev.unwrap().hash());
+            hasher.input(prev.unwrap().hash_str().as_bytes());
         }
 
         let hash = Vec::from(hasher.result().as_slice());
+        let hash_str = Transaction::hash_string(&hash);
 
         Ok(Transaction {
             id: id,
@@ -88,6 +90,7 @@ impl Transaction {
             process_id: pid,
             text: text,
             hash: hash,
+            hash_str: hash_str,
         })
     }
 
@@ -100,6 +103,7 @@ impl Transaction {
         text: String,
     ) -> Result<Self, String> {
         Transaction::check_input(id, gid, pid, &text)?;
+        let hash_str = Transaction::hash_string(&hash);
         Ok(Transaction {
             id: id,
             timestamp: time,
@@ -107,6 +111,7 @@ impl Transaction {
             process_id: pid,
             text: text,
             hash: hash,
+            hash_str: hash_str,
         })
     }
 
@@ -129,13 +134,20 @@ impl Transaction {
         )
     }
 
-    fn hash_string(&self) -> String {
-        format!("{:02X}", self.hash.iter().format(""))
+    fn hash_string(hash: &Vec<u8>) -> String {
+        format!("{:02X}", hash.iter().format(""))
     }
 
     pub fn to_string(&self) -> String {
         format!(
-            "{partial}{chksm}\n",
+            "{data}{chksm}\n",
+            data = &self.to_data_string(),
+            chksm = &self.hash_str,
+        )
+    }
+
+    pub fn to_data_string(&self) -> String {
+        format!("{partial}",
             partial = Self::partial_string(
                 self.id,
                 &self.timestamp,
@@ -143,10 +155,8 @@ impl Transaction {
                 self.process_id,
                 &self.text
             ),
-            chksm = self.hash_string(),
         )
     }
-
 
     pub fn parse(src: &str) -> Result<Self, String> {
         let mut parts = src.split(";");
@@ -236,6 +246,10 @@ impl Transaction {
         self.hash.as_slice()
     }
 
+    pub fn hash_str<'a>(&'a self) -> &'a str {
+        self.hash_str.as_str()
+    }
+
     pub fn next_id(&self) -> u32 {
         if self.id >= Transaction::MAX_ID {
             Transaction::MIN_ID
@@ -243,6 +257,28 @@ impl Transaction {
             self.id + 1
         }
     }
+
+    pub fn verify(curr: &Transaction, prev: &Transaction) -> Result<(), String> {
+
+        //FIXME: do we need to check ids?
+
+        if curr.id() != prev.next_id() {
+            return Err("Non-consecutive IDs".to_owned());
+        }
+
+        let mut hasher = Sha256::default();
+        hasher.input(curr.to_data_string().into_bytes().as_ref());
+        hasher.input(prev.hash_str().as_bytes());
+
+        let expected_hash = hasher.result();
+        let curr_hash = curr.hash();
+
+        if expected_hash.as_slice() != curr_hash {
+            return Err("Missmatched hashes".to_owned());
+        }
+        Ok(())
+    }
+
 }
 
 
@@ -297,7 +333,7 @@ impl TransactionBuilder {
         )
     }
 
-    pub fn try_finish_with_hash(self, hash: Vec<u8>) -> Result<Transaction, String> {
+    fn try_finish_with_hash(self, hash: Vec<u8>) -> Result<Transaction, String> {
         Transaction::with_hash(
             hash,
             self.id.ok_or("No id given".to_string())?,
@@ -307,4 +343,94 @@ impl TransactionBuilder {
             self.text.ok_or("No text given".to_string())?,
         )
     }
+}
+
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use super::super::*;
+    use chrono::prelude::*;
+
+    #[test]
+    fn parse1() {
+        let input = "00000001;041017-10:00:00;00;01;Testü;267C4D5033ED7F96B43216FD8C871E4B96F1221204312AD6F43362F2D12C9B29\n";
+        let parsed = Transaction::parse(input);
+        assert!(parsed.is_ok());
+        assert_eq!(parsed.unwrap().to_string(), input);
+    }
+
+    #[test]
+    fn parse2() {
+        let t = Transaction::build()
+            .with_id(42)
+            .with_timestamp(
+                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00")
+                .unwrap()
+                .with_timezone(&FixedOffset::east(Transaction::TZ_OFFSET)),
+            )
+            .with_group_id(43)
+            .with_process_id(44)
+            .with_text("Großes S".to_owned())
+            .try_finish_with_log(&SingleTransactionLog::new())
+            .unwrap();
+        let parsed = Transaction::parse(&t.to_string());
+        assert!(parsed.is_ok());
+        assert_eq!(parsed.unwrap(), t);
+    }
+
+    #[test]
+    fn verify1() {
+        let mut log = FullTransactionLog::new();
+        let tx1 = Transaction::build()
+            .with_id(1)
+            .with_timestamp(
+                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00")
+                .unwrap()
+                .with_timezone(&FixedOffset::east(Transaction::TZ_OFFSET)),
+            )
+            .with_group_id(1)
+            .with_process_id(1)
+            .with_text("test1".to_owned())
+            .try_finish_with_log(&log)
+            .unwrap();
+        log.append(tx1.clone());
+        let tx2 = Transaction::build()
+            .with_id(2)
+            .with_timestamp(
+                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00")
+                .unwrap()
+                .with_timezone(&FixedOffset::east(Transaction::TZ_OFFSET)),
+            )
+            .with_group_id(2)
+            .with_process_id(2)
+            .with_text("test2".to_owned())
+            .try_finish_with_log(&log)
+            .unwrap();
+        assert_eq!(Transaction::verify(&tx2, &tx1), Ok(()));
+    }
+
+
+    #[test]
+    fn verify2() {
+        let mut log = FullTransactionLog::new();
+        let tx1 = Transaction::build()
+            .with_id(1)
+            .with_timestamp(
+                DateTime::parse_from_rfc3339("2017-10-04T11:05:00+01:00")
+                .unwrap()
+                .with_timezone(&FixedOffset::east(Transaction::TZ_OFFSET)),
+            )
+            .with_group_id(1)
+            .with_process_id(1)
+            .with_text("test1".to_owned())
+            .try_finish_with_log(&log)
+            .unwrap();
+        log.append(tx1.clone());
+        let tx2_input = "00000002;041017-10:00:00;00;01;Testü;267C4D5033ED7F96B43216FD8C871E4B96F1221204312AD6F43362F2D12C9B29\n";
+        let tx2 = Transaction::parse(tx2_input).unwrap();
+        assert!(Transaction::verify(&tx2, &tx1).is_err());
+    }
+
 }
