@@ -260,8 +260,6 @@ impl Transaction {
 
     pub fn verify(curr: &Transaction, prev: &Transaction) -> Result<(), String> {
 
-        //FIXME: do we need to check ids?
-
         if curr.id() != prev.next_id() {
             return Err("Non-consecutive IDs".to_owned());
         }
@@ -273,6 +271,17 @@ impl Transaction {
         let expected_hash = hasher.result();
         let curr_hash = curr.hash();
 
+        if expected_hash.as_slice() != curr_hash {
+            return Err("Missmatched hashes".to_owned());
+        }
+        Ok(())
+    }
+
+    pub fn verify_single(tx: &Transaction) -> Result<(), String> {
+        let mut hasher = Sha256::default();
+        hasher.input(tx.to_data_string().into_bytes().as_ref());
+        let expected_hash = hasher.result();
+        let curr_hash = tx.hash();
         if expected_hash.as_slice() != curr_hash {
             return Err("Missmatched hashes".to_owned());
         }
