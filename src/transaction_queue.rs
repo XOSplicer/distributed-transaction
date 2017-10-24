@@ -1,3 +1,4 @@
+/*
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Sender, Receiver}
 use std::thread::JoinHandle;
@@ -30,7 +31,7 @@ pub struct TransactionQueue {
 impl TransactionQueue {
     const QUEUE_SIZE: usize = 64;
 
-    pub fn new(log: SyncroizedFileLog) -> Self {
+    pub fn new<L: TransactionLog>(log: L) -> Self {
         let (sender, receiver) = mpsc::channel<QueueMessage>();
         QueuedTransaction {
             channel_send: sender,
@@ -59,8 +60,7 @@ impl TransactionQueue {
         self.sender.clone()
     }
 
-    fn flush(log: &mut SyncroizedFileLog, q: &mut VecDeque<QueuedTransaction>) {
-        log.syncronize();
+    fn flush<L: TransactionLog>(log: &mut L, q: &mut VecDeque<QueuedTransaction>) {
         for QueuedTransaction{text: text, gid: gid, pid: pid} in queue.drain(..) {
             let id = log.next_id();
             let tx = Transaction::build()
@@ -72,8 +72,8 @@ impl TransactionQueue {
                     .try_finish_with_log(log)
                     .unwrap();
             log.append(tx);
-            log.syncronize();
         }
     }
 
 }
+*/

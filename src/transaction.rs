@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 
 use transaction_log::TransactionLog;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
     id: u32,
     timestamp: DateTime<chrono::FixedOffset>,
@@ -16,7 +16,7 @@ pub struct Transaction {
     hash_str: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct TransactionBuilder {
     id: Option<u32>,
     timestamp: Option<DateTime<chrono::FixedOffset>>,
@@ -75,7 +75,7 @@ impl Transaction {
                 .into_bytes()
                 .as_ref(),
         );
-        let prev = log.last();
+        let prev = log.last().map_err(|_| "Could not get last log entry".to_owned())?;
         if prev.is_some() {
             hasher.input(prev.unwrap().hash_str().as_bytes());
         }
