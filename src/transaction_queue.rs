@@ -1,11 +1,12 @@
-/*
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Sender, Receiver}
+
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::collections::VecDeque;
+use std::thread;
 
-use transaction::{Transaction, TransactionBuilder};
-use transaction_log::{TransactionLog, SyncroizedFileLog}
+use transaction::Transaction;
+use transaction_log::TransactionLog;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct QueuedTransaction {
@@ -21,48 +22,55 @@ pub enum QueueMessage {
     Finish
 }
 
+use QueueMessage::*;
 
 #[derive(Debug)]
 pub struct TransactionQueue {
-    channel_send: Sender,
+    channel_send: Sender<QueueMessage>,
     thread: JoinHandle<()>,
 }
 
 impl TransactionQueue {
     const QUEUE_SIZE: usize = 64;
 
-    pub fn new<L: TransactionLog>(log: L) -> Self {
-        let (sender, receiver) = mpsc::channel<QueueMessage>();
-        QueuedTransaction {
+    pub fn new<L: TransactionLog + Send + 'static>(mut log: L) -> Self {
+        let (sender, receiver) = mpsc::channel::<QueueMessage>();
+        TransactionQueue {
             channel_send: sender,
-            thread: thread::spawn(move || {
-                let mut queue = VecDeque::with_capacity::<QueuedTransaction>();
-                loop {
-                    let msg = receiver.recv().unrwap();
-                    match msg {
-                        Queue(qtx) => {
-                            queue.push_back(qtx);
-                        },
-                        Flush => {
-                            TransactionQueue::flush(&mut log, &mut queue);
-                        },
-                        Finish => {
-                            TransactionQueue::flush(&mut log, &mut queue);
-                            break;
-                        },
+            thread: thread::Builder::new()
+                .name("transaction_queue".to_owned())
+                .spawn(move || {
+                    let mut queue = VecDeque::with_capacity(TransactionQueue::QUEUE_SIZE);
+                    loop {
+                        let msg = receiver.recv().unwrap();
+                        match msg {
+                            Queue(qtx) => {
+                                queue.push_back(qtx);
+                            },
+                            Flush => {
+                                TransactionQueue::flush(&mut log, &mut queue);
+                            },
+                            Finish => {
+                                TransactionQueue::flush(&mut log, &mut queue);
+                                break;
+                            },
+                        }
                     }
-                }
-            }),
+                }).unwrap(),
         }
     }
 
-    pub fn channel_sender(&self) -> Sender<QueueMessage> {
-        self.sender.clone()
+    pub fn sender(&self) -> Sender<QueueMessage> {
+        self.channel_send.clone()
+    }
+
+    pub fn join(self) -> thread::Result<()> {
+        self.thread.join()
     }
 
     fn flush<L: TransactionLog>(log: &mut L, q: &mut VecDeque<QueuedTransaction>) {
-        for QueuedTransaction{text: text, gid: gid, pid: pid} in queue.drain(..) {
-            let id = log.next_id();
+        for QueuedTransaction{text: text, gid: gid, pid: pid} in q.drain(..) {
+            let id = log.next_id().unwrap();
             let tx = Transaction::build()
                     .with_id(id)
                     .with_current_timestamp()
@@ -71,9 +79,8 @@ impl TransactionQueue {
                     .with_text(text)
                     .try_finish_with_log(log)
                     .unwrap();
-            log.append(tx);
+            log.append(tx).unwrap();
         }
     }
 
 }
-*/

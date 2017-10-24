@@ -6,11 +6,12 @@ extern crate clap;
 
 mod transaction;
 mod transaction_log;
+mod transaction_queue;
 
 use clap::{App, Arg};
 
-use transaction::Transaction;
 use transaction_log::*;
+use transaction_queue::*;
 
 fn main() {
     let arg_matches = App::new("transaction")
@@ -33,23 +34,18 @@ fn main() {
         .and_then(|s| s.parse::<u8>().ok())
         .unwrap_or(0);
     let file_path = arg_matches.value_of("LOG_FILE")
-        .unwrap_or("/tmp/transaction_log.tmp");
-    let mut tx_log = SimpleFileLog::new(file_path);
+        .unwrap_or("/tmp/transaction_log.tmp").to_owned();
+    let queue = TransactionQueue::new(SimpleFileLog::new(file_path));
+    let q = queue.sender();
     for _ in 0..n {
-        let tx = Transaction::build()
-            .with_id(tx_log.next_id().unwrap())
-            .with_current_timestamp()
-            .with_group_id(gid)
-            .with_process_id(pid)
-            .with_text("testü".to_owned())
-            .try_finish_with_log(&tx_log)
-            .unwrap();
-        println!("appending {}", tx.to_string());
-        //println!("pre append log: {:#?}", &tx_log);
-        tx_log.append(tx).unwrap();
-        //println!("post append log: {:#?}", &tx_log);
-        //println!("###########################################################");
+        q.send(QueueMessage::Queue(QueuedTransaction {
+            text: "ÄÜÖ".to_owned(),
+            gid: gid,
+            pid: pid,
+        })).unwrap();
     }
-    println!("Last tx: {}", tx_log.last().unwrap().unwrap().to_string());
+    q.send(QueueMessage::Flush).unwrap();
+    q.send(QueueMessage::Finish).unwrap();
+    queue.join().unwrap();
 }
 

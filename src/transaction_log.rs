@@ -2,11 +2,12 @@ use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::io;
 use std::io::prelude::*;
+use std::fmt;
 
 use transaction::Transaction;
 
 pub trait TransactionLog {
-    type Error;
+    type Error: fmt::Debug;
 
     fn last(&self) -> Result<Option<Transaction>, Self::Error>;
     fn append(&mut self, tx: Transaction) -> Result<(), Self::Error>;
