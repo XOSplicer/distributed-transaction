@@ -22,7 +22,7 @@ pub enum QueueMessage {
     Finish
 }
 
-use QueueMessage::*;
+use self::QueueMessage::*;
 
 #[derive(Debug)]
 pub struct TransactionQueue {
@@ -69,7 +69,7 @@ impl TransactionQueue {
     }
 
     fn flush<L: TransactionLog>(log: &mut L, q: &mut VecDeque<QueuedTransaction>) {
-        for QueuedTransaction{text: text, gid: gid, pid: pid} in q.drain(..) {
+        for QueuedTransaction{ text, gid, pid } in q.drain(..) {
             let id = log.next_id().unwrap();
             let tx = Transaction::build()
                     .with_id(id)

@@ -138,3 +138,16 @@ impl<P: AsRef<Path>> SimpleFileLog<P> {
         }
     }
 }
+
+pub trait AllTransactions {
+    type Error: fmt::Debug;
+    fn all_transactions(&self) -> Result<Vec<Transaction>, Self::Error>;
+}
+
+impl AllTransactions for FullTransactionLog {
+    type Error = ();
+    fn all_transactions(&self) -> Result<Vec<Transaction>, Self::Error> {
+        Ok(self.log.clone())
+    }
+}
+

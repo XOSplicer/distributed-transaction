@@ -140,7 +140,7 @@ impl Transaction {
 
     pub fn to_string(&self) -> String {
         format!(
-            "{data}{chksm}\n",
+            "{data}{chksm}",
             data = &self.to_data_string(),
             chksm = &self.hash_str,
         )
