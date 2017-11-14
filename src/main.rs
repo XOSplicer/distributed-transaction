@@ -1,17 +1,17 @@
 #![feature(plugin)]
-
 #![plugin(rocket_codegen)]
-extern crate rocket;
 extern crate chrono;
+extern crate rocket;
 //extern crate clap;
 extern crate itertools;
+#[macro_use]
+extern crate quick_error;
 extern crate sha2;
-//#[macro_use]
-//extern crate quick_error;
 
 mod transaction;
 mod transaction_log;
 
+use std::fs::OpenOptions;
 use std::sync::Mutex;
 
 use rocket::response::status;
@@ -21,10 +21,23 @@ use rocket::http;
 use transaction::{TransactionData, TransactionTime};
 use transaction_log::*;
 
-static BASE_URL: &'static str = "http://localhost";
-
 #[derive(Debug)]
-struct TransactionLogState(Mutex<FullTransactionLog>);
+struct TransactionLogState(Mutex<DualLog<String>>);
+
+#[derive(Debug, Clone)]
+struct SettingsState {
+    pub base_url: String,
+    pub tx_log_file: String,
+}
+
+impl Default for SettingsState {
+    fn default() -> Self {
+        SettingsState {
+            base_url: "http://localhost".into(),
+            tx_log_file: "/tmp/tx_log.txt".into(),
+        }
+    }
+}
 
 #[get("/")]
 fn read_all_transactions(
@@ -65,6 +78,7 @@ fn read_transaction(
 fn write_transaction(
     input: String,
     tx_log: State<TransactionLogState>,
+    settings: State<SettingsState>,
 ) -> Result<status::Created<String>, status::Custom<String>> {
     let mut parts = input.split(";");
 
@@ -79,10 +93,9 @@ fn write_transaction(
             status::Custom(http::Status::BadRequest, format!("{:?}", e))
         })?;
 
-    let data: TransactionData =
-        itertools::join(parts, ";").parse().map_err(|e| {
-            status::Custom(http::Status::BadRequest, format!("{:?}", e))
-        })?;
+    let data: TransactionData = itertools::join(parts, ";").parse().map_err(
+        |e| status::Custom(http::Status::BadRequest, format!("{:?}", e)),
+    )?;
 
     let tx = tx_log
         .0
@@ -96,19 +109,27 @@ fn write_transaction(
         })?;
 
     Ok(status::Created(
-        format!("{}/transactions/{}", BASE_URL, tx.id().inner()),
+        format!("{}/transactions/{}", settings.base_url, tx.id().inner()),
         Some(tx.to_string()),
     ))
 }
 
 
 fn main() {
-    let mut log = FullTransactionLog::new();
-    log.create(TransactionData::new(0, 0, "example").unwrap(), None)
-        .unwrap();
+    let settings = SettingsState::default();
+    println!("Settings:\n{:#?}", &settings);
+    {
+        let _ = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(settings.clone().tx_log_file)
+            .unwrap();
+    }
+    let mut log = DualLog::load(settings.clone().tx_log_file).unwrap();
 
     rocket::ignite()
         .manage(TransactionLogState(Mutex::new(log)))
+        .manage(settings)
         .mount(
             "/transactions",
             routes![read_all_transactions, read_transaction, write_transaction],
