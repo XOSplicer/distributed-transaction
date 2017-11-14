@@ -1,18 +1,23 @@
-#![feature(plugin)]
-#![plugin(rocket_codegen)]
-
-extern crate rocket;
-
 extern crate chrono;
-extern crate itertools;
-extern crate sha2;
-#[macro_use] extern crate quick_error;
 extern crate clap;
+//#![feature(plugin)]
+//#![plugin(rocket_codegen)]
+extern crate rocket;
+//extern crate itertools;
+extern crate sha2;
+//#[macro_use]
+//extern crate quick_error;
+
 
 mod transaction;
-mod transaction_log;
-//mod transaction_queue;
+use transaction::{
+        Transaction,
+        TransactionId,
+        TransactionTime,
+        TransactionData,
+        TransactionHash};
 
+/*
 use std::sync::{Arc, Mutex};
 
 use clap::{App, Arg};
@@ -126,3 +131,8 @@ fn main() {
         .launch();
 }
 
+*/
+
+fn main() {
+
+}
