@@ -82,14 +82,8 @@ impl GetById for FullTransactionLog {
 impl GetAll for FullTransactionLog {
     type Error = ();
     fn get_all(&self) -> Result<Vec<Transaction>, Self::Error> {
-        Ok(
-            self.log
-            .values()
-            .cloned()
-            .collect()
-        )
+        Ok(self.log.values().cloned().collect())
     }
-
 }
 
 
