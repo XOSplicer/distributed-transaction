@@ -1,10 +1,100 @@
-use std::fs::{File, OpenOptions};
-use std::path::Path;
-use std::io;
-use std::io::prelude::*;
-use std::fmt;
+//use std::fs::{File, OpenOptions};
+//use std::path::Path;
+//use std::io;
+//use std::io::prelude::*;
 
-use transaction::Transaction;
+use std::fmt;
+use std::collections::BTreeMap;
+
+use transaction::{Transaction, TransactionId, TransactionTime, TransactionData};
+
+
+pub trait TransactionLog {
+    type Error: fmt::Debug;
+    fn create(
+        &mut self,
+        data: TransactionData,
+        time: Option<TransactionTime>,
+    ) -> Result<Transaction, Self::Error>;
+
+    fn last(&self) -> Result<Option<Transaction>, Self::Error>;
+
+    fn next_id(&self) -> Result<TransactionId, Self::Error> {
+        Ok(self.last()?.map(|t| t.id().next()).unwrap_or_default())
+    }
+}
+
+pub trait GetById {
+    type Error: fmt::Debug;
+    fn get_by_id(&self, id: u32) -> Result<Option<Transaction>, Self::Error>;
+}
+
+pub trait GetAll {
+    type Error: fmt::Debug;
+    fn get_all(&self) -> Result<Vec<Transaction>, Self::Error>;
+}
+
+
+#[derive(Debug)]
+pub struct FullTransactionLog {
+    log: BTreeMap<u32, Transaction>,
+}
+
+impl FullTransactionLog {
+    pub fn new() -> Self {
+        FullTransactionLog { log: BTreeMap::new() }
+    }
+}
+
+impl TransactionLog for FullTransactionLog {
+    type Error = ();
+
+    fn create(
+        &mut self,
+        data: TransactionData,
+        time: Option<TransactionTime>,
+    ) -> Result<Transaction, Self::Error> {
+        let next_id = self.next_id()?;
+        let last = self.last()?;
+        let tx = Transaction::new(
+            next_id,
+            time.unwrap_or_else(|| TransactionTime::current()),
+            data,
+            last.as_ref(),
+        );
+        let c = tx.clone();
+        self.log.insert(tx.id().inner(), tx);
+        Ok(c)
+    }
+
+    fn last(&self) -> Result<Option<Transaction>, Self::Error> {
+        Ok(self.log.iter().next_back().map(|(_, t)| t).cloned())
+    }
+}
+
+impl GetById for FullTransactionLog {
+    type Error = ();
+    fn get_by_id(&self, id: u32) -> Result<Option<Transaction>, Self::Error> {
+        Ok(self.log.get(&id).cloned())
+    }
+}
+
+impl GetAll for FullTransactionLog {
+    type Error = ();
+    fn get_all(&self) -> Result<Vec<Transaction>, Self::Error> {
+        Ok(
+            self.log
+            .values()
+            .cloned()
+            .collect()
+        )
+    }
+
+}
+
+
+
+/*
 
 pub trait TransactionLog {
     type Error: fmt::Debug;
@@ -151,3 +241,4 @@ impl AllTransactions for FullTransactionLog {
     }
 }
 
+*/

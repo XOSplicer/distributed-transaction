@@ -71,11 +71,17 @@ impl TransactionId {
 
 }
 
+impl Default for TransactionId {
+    fn default() -> Self {
+        TransactionId(Self::MIN_ID)
+    }
+}
+
 impl FromStr for TransactionId {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let id: u32 = s.parse()
-            .map_err(|_| Error::ParseError(s.to_owned()))?;
+            .map_err(|_| Error::ParseError(format!("Could not parse id `{}` ", s.to_owned())))?;
         Ok(Self::new(id)?)
     }
 }
@@ -104,7 +110,7 @@ impl FromStr for TransactionTime {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let t = chrono::FixedOffset::east(Self::TZ_OFFSET)
             .datetime_from_str(s, Self::FORMAT)
-            .map_err(|_| Error::ParseError(s.to_owned()))?;
+            .map_err(|_| Error::ParseError(format!("Could not parse time `{}` ", s.to_owned())))?;
         Ok(TransactionTime(t))
     }
 }
@@ -161,6 +167,7 @@ impl TransactionData {
 impl FromStr for TransactionData {
     type Err = Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        //println!("Parsing for data: {}", s);
         let mut parts = s.split(";");
         let gid: u8 = parts
             .next()
