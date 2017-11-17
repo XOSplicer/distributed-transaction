@@ -157,10 +157,21 @@ impl<P: AsRef<Path>> TransactionLog for SimpleFileLog<P>{
         // Some(Ok(t)) -> Some(t)
         // Some(Err(e)) -> early return Err(e)
         let mut lines = buffer.lines().rev();
-        let last_tx = lines.next()
-            .and_then(|line| line.parse::<Transaction>().ok());
-        let last2_tx = lines.next()
-            .and_then(|line| line.parse::<Transaction>().ok());
+
+        let last_tx = match lines.next()
+            .map(|line| line.parse::<Transaction>()) {
+            Some(Ok(t)) => Some(t),
+            Some(Err(e)) => return Err(e.into()),
+            None => None,
+        };
+
+        let last2_tx = match lines.next()
+            .map(|line| line.parse::<Transaction>()) {
+            Some(Ok(t)) => Some(t),
+            Some(Err(e)) => return Err(e.into()),
+            None => None,
+        };
+
         match (&last2_tx, &last_tx) {
             (&Some(ref tx1), &Some(ref tx2)) => {
                 verify_transaction(tx2, Some(tx1))?;

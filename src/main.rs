@@ -56,6 +56,21 @@ fn read_all_transactions(
     ))
 }
 
+#[get("/last")]
+fn read_last_transaction(
+    tx_log: State<TransactionLogState>,
+) -> Result<Option<String>, http::Status> {
+    Ok(
+        tx_log
+            .0
+            .lock()
+            .map_err(|_| http::Status::InternalServerError)?
+            .last()
+            .map_err(|_| http::Status::InternalServerError)?
+            .map(|t| t.to_string()),
+    )
+}
+
 #[get("/<id>")]
 fn read_transaction(
     id: u32,
@@ -125,14 +140,19 @@ fn main() {
             .open(settings.clone().tx_log_file)
             .unwrap();
     }
-    let mut log = DualLog::load(settings.clone().tx_log_file).unwrap();
+    let log = DualLog::load(settings.clone().tx_log_file).unwrap();
 
     rocket::ignite()
         .manage(TransactionLogState(Mutex::new(log)))
         .manage(settings)
         .mount(
             "/transactions",
-            routes![read_all_transactions, read_transaction, write_transaction],
+            routes![
+                read_all_transactions,
+                read_last_transaction,
+                read_transaction,
+                write_transaction
+            ],
         )
         .launch();
 }
