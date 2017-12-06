@@ -39,7 +39,9 @@ pub struct FullTransactionLog {
     log: BTreeMap<u32, Transaction>,
 }
 
+
 impl FullTransactionLog {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         FullTransactionLog { log: BTreeMap::new() }
     }
@@ -194,7 +196,7 @@ impl<P: AsRef<Path>> GetAll for SimpleFileLog<P> {
     type Error = FileError;
     fn get_all(&self) -> Result<Vec<Transaction>, Self::Error> {
         let f = File::open(self.path.as_ref())?;
-        let mut lines = io::BufReader::new(f).lines();
+        let lines = io::BufReader::new(f).lines();
         let mut vec = Vec::with_capacity(lines.size_hint().0);
         {
             let mut last_tx = None;

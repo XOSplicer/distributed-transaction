@@ -159,14 +159,17 @@ impl TransactionData {
 
     }
 
+    #[allow(dead_code)]
     pub fn gid(&self) -> u8 {
         self.gid
     }
 
+    #[allow(dead_code)]
     pub fn pid(&self) -> u8 {
         self.pid
     }
 
+    #[allow(dead_code)]
     pub fn text<'a>(&'a self) -> &'a str {
         self.text.as_str()
     }

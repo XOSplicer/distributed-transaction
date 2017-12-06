@@ -1,5 +1,4 @@
 [global]
-transaction_log_file = "/tmp/tx_log.tmp"
 
 [development]
 address = "localhost"
